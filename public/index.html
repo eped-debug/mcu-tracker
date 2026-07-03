@@ -70,6 +70,7 @@
   <script>
     let moviesData = [];
     let savedAdminKey = "";
+    let currentTab = 'summary'; // ⭐ 1. เพิ่มตัวแปรเพื่อจำว่าตอนนี้เปิดแท็บไหนอยู่
 
     async function fetchMovies() {
       try {
@@ -87,7 +88,7 @@
           return;
         }
 
-        switchTab('summary');
+        switchTab(currentTab); // ⭐ 2. เปลี่ยนให้เปิดแท็บปัจจุบันที่ใช้อยู่แทนการบังคับไปหน้า summary
         renderSummary();
         renderChecklist();
       } catch (error) {
@@ -96,6 +97,7 @@
     }
 
     function switchTab(tab) {
+      currentTab = tab; // ⭐ 3. ทุกครั้งที่กดเปลี่ยนแท็บ ให้บันทึกความจำไว้ว่าอยู่แท็บไหน
       const isSummary = tab === 'summary';
       document.getElementById('tab-summary').classList.toggle('hidden', !isSummary);
       document.getElementById('tab-checklist').classList.toggle('hidden', isSummary);
@@ -117,7 +119,6 @@
         const percent = Math.round((d.watched / d.total) * 100) || 0;
         const isComplete = percent === 100;
 
-        // ปรับสีและดีไซน์ให้เหมือนภาพเรฟเฟอเรนซ์ (image_7a0529.png) เป๊ะๆ
         return `
           <div class="bg-white p-5 rounded-2xl ref-shadow border border-gray-100 flex items-center gap-4">
             <div class="w-12 h-12 ${isComplete ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-500'} rounded-xl flex items-center justify-center font-bold text-base flex-shrink-0">P${phase}</div>
