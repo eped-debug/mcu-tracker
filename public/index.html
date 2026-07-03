@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MCU Watchlist Tracker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Kanit', sans-serif; background-color: #f3f4f6; color: #333; }
+    .marvel-red { background-color: #e23636; }
+    .text-marvel { color: #e23636; }
+    
+    .checkbox-round {
+      width: 24px; height: 24px; background-color: white; border-radius: 50%;
+      vertical-align: middle; border: 2px solid #ddd; appearance: none;
+      -webkit-appearance: none; outline: none; cursor: pointer; transition: 0.2s;
+      flex-shrink: 0;
+    }
+    .checkbox-round:checked { background-color: #e23636; border-color: #e23636; }
+    .checkbox-round:checked::after {
+      content: '✓'; color: white; font-size: 14px; display: block; text-align: center; line-height: 20px; font-weight: bold;
+    }
+    
+    .sticky-nav { position: sticky; top: 0; z-index: 40; background-color: #f3f4f6; padding-top: 20px; padding-bottom: 10px;}
+    .ref-shadow { box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05); }
+
+    /* Modal Styling */
+    .modal-overlay { background-color: rgba(0, 0, 0, 0.5); backdrop-filter: blur(4px); }
+  </style>
+</head>
+<body class="pb-24">
+
+  <nav class="sticky-nav">
+    <div class="max-w-md mx-auto px-4">
+      <h1 class="text-2xl font-bold text-center text-marvel mb-4 uppercase tracking-tighter">MCU TRACKER</h1>
+      <div class="flex bg-gray-200 rounded-xl p-1 shadow-inner">
+        <button onclick="switchTab('summary')" id="btn-summary" class="flex-1 py-2.5 rounded-lg font-medium text-sm transition-all duration-300 bg-white shadow-sm text-gray-800">Summary</button>
+        <button onclick="switchTab('checklist')" id="btn-checklist" class="flex-1 py-2.5 rounded-lg font-medium text-sm transition-all duration-300 text-gray-500">Checklist</button>
+      </div>
+    </div>
+  </nav>
+
+  <div class="max-w-md mx-auto px-4 mt-6">
+    
+    <div id="tab-summary" class="space-y-4">
+      </div>
+
+    <div id="tab-checklist" class="hidden space-y-6">
+      <button onclick="checkAdminBeforeAdd()" class="w-full bg-white border-2 border-dashed border-gray-300 text-gray-500 py-4 rounded-2xl font-medium flex items-center justify-center gap-2 hover:border-red-400 hover:text-red-500 transition">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
+        </svg>
+        เพิ่มหนังใหม่เข้า Watchlist
+      </button>
+
+      <div id="checklist-content" class="space-y-6">
+        </div>
+    </div>
+  </div>
+
+  <div id="admin-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 modal-overlay">
+    <div class="bg-white w-full max-w-xs rounded-3xl shadow-2xl overflow-hidden p-6">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-lg font-bold text-gray-800">ข้อมูลหนังใหม่</h3>
+        <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <div class="space-y-4">
+        <input type="text" id="add-title" placeholder="ชื่อภาพยนตร์ / ซีรีส์" class="w-full px-4 py-3 rounded-xl border border-gray-100 bg-gray-50 text-sm focus:ring-2 focus:ring-red-500 outline-none">
+        <input type="date" id="add-date" class="w-full px-4 py-3 rounded-xl border border-gray-100 bg-gray-50 text-sm text-gray-500 outline-none">
+        <input type="number" id="add-phase" placeholder="Phase (ตัวเลข)" class="w-full px-4 py-3 rounded-xl border border-gray-100 bg-gray-50 text-sm outline-none">
+        <button onclick="submitNewMovie()" class="w-full marvel-red text-white py-3.5 rounded-xl text-sm font-bold shadow-lg">บันทึกข้อมูล</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let moviesData = [];
+    let savedAdminKey = ""; // เก็บชุดรหัสผ่านไว้ชั่วคราวเพื่อไม่ต้องกรอกซ้ำบ่อยๆ
+
+    async function fetchMovies() {
+      const response = await fetch('/api/movies');
+      moviesData = await response.json();
+      renderSummary();
+      renderChecklist();
+    }
+
+    function switchTab(tab) {
+      const isSummary = tab === 'summary';
+      document.getElementById('tab-summary').classList.toggle('hidden', !isSummary);
+      document.getElementById('tab-checklist').classList.toggle('hidden', isSummary);
+      
+      const btnSummary = document.getElementById('btn-summary');
+      const btnChecklist = document.getElementById('btn-checklist');
+      btnSummary.className = isSummary ? 'flex-1 py-2.5 rounded-lg font-medium text-sm bg-white shadow-sm text-gray-800' : 'flex-1 py-2.5 rounded-lg font-medium text-sm text-gray-500';
+      btnChecklist.className = !isSummary ? 'flex-1 py-2.5 rounded-lg font-medium text-sm bg-white shadow-sm text-gray-800' : 'flex-1 py-2.5 rounded-lg font-medium text-sm text-gray-500';
+    }
+
+    function renderSummary() {
+      const container = document.getElementById('tab-summary');
+      const phases = {};
+      moviesData.forEach(m => {
+        if (!phases[m.phase]) phases[m.phase] = { total: 0, watched: 0 };
+        phases[m.phase].total++;
+        if (m.isWatched) phases[m.phase].watched++;
+      });
+
+      container.innerHTML = Object.keys(phases).map(phase => {
+        const d = phases[phase];
+        const percent = Math.round((d.watched / d.total) * 100) || 0;
+        const isComplete = percent === 100;
+
+        return `
+          <div class="bg-white p-5 rounded-2xl ref-shadow border border-gray-100 flex items-start gap-4">
+            <div class="w-12 h-12 bg-red-50 rounded-xl flex items-center justify-center text-red-500 font-bold text-lg flex-shrink-0">P${phase}</div>
+            <div class="flex-1">
+              <div class="flex justify-between items-center mb-2.5">
+                <span class="font-semibold text-gray-800">Phase ${phase}</span>
+                ${isComplete ? '<span class="text-green-500 font-medium text-sm flex items-center gap-1">✓ Completed</span>' : `<span class="text-gray-400 font-medium text-sm">${percent}%</span>`}
+              </div>
+              <div class="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden mb-2">
+                <div class="${isComplete ? 'bg-green-500' : 'marvel-red'} h-full transition-all duration-700" style="width: ${percent}%"></div>
+              </div>
+              <div class="text-[12px] text-gray-400">${d.watched} of ${d.total} titles</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderChecklist() {
+      const container = document.getElementById('checklist-content');
+      const grouped = {};
+      moviesData.forEach(m => {
+        if (!grouped[m.phase]) grouped[m.phase] = [];
+        grouped[m.phase].push(m);
+      });
+
+      container.innerHTML = Object.keys(grouped).map(phase => `
+        <div class="space-y-3">
+          <h3 class="text-marvel font-bold text-xs ml-1 uppercase tracking-widest">Phase ${phase}</h3>
+          <div class="bg-white rounded-2xl ref-shadow border border-gray-100 overflow-hidden">
+            ${grouped[phase].map(movie => {
+              const date = new Date(movie.releaseDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' });
+              return `
+                <div class="flex items-center p-4 border-b border-gray-100 last:border-0">
+                  <input type="checkbox" class="checkbox-round" ${movie.isWatched ? 'checked' : ''} onchange="updateStatus('${movie._id}', this.checked)">
+                  <div class="ml-4">
+                    <div class="text-sm font-medium ${movie.isWatched ? 'text-gray-400 line-through' : 'text-gray-800'}">${movie.title}</div>
+                    <div class="text-xs text-gray-400 mt-0.5">${date}</div>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // ฟังก์ชันตรวจสอบรหัสผ่านก่อนแสดงหน้าต่างลอย
+    function checkAdminBeforeAdd() {
+      const password = prompt("กรุณาใส่รหัสผ่าน Admin:");
+      if (password === "admin123") { // รหัสผ่านของคุณ
+        savedAdminKey = password;
+        document.getElementById('admin-modal').classList.remove('hidden');
+      } else if (password !== null) {
+        alert("รหัสผ่านไม่ถูกต้อง!");
+      }
+    }
+
+    function closeModal() {
+      document.getElementById('admin-modal').classList.add('hidden');
+    }
+
+    async function submitNewMovie() {
+      const title = document.getElementById('add-title').value;
+      const releaseDate = document.getElementById('add-date').value;
+      const phase = document.getElementById('add-phase').value;
+
+      if(!title || !releaseDate || !phase) return alert("กรุณากรอกข้อมูลให้ครบถ้วน");
+
+      const res = await fetch('/api/movies', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ title, releaseDate, phase, secretKey: savedAdminKey })
+      });
+
+      if(res.ok) {
+        alert("เพิ่มข้อมูลสำเร็จ!");
+        closeModal();
+        fetchMovies();
+      } else {
+        alert("เซสชันหมดอายุ หรือรหัสผ่านไม่ถูกต้อง");
+      }
+    }
+
+    async function updateStatus(id, isWatched) {
+      if(!savedAdminKey) {
+        const password = prompt("กรุณาใส่รหัสผ่าน Admin เพื่อเช็คลิสต์:");
+        if (password === "admin123") {
+          savedAdminKey = password;
+        } else {
+          alert("คุณไม่มีสิทธิ์แก้ไขข้อมูล");
+          fetchMovies();
+          return;
+        }
+      }
+
+      await fetch(`/api/movies/${id}`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ isWatched, secretKey: savedAdminKey })
+      });
+      fetchMovies();
+    }
+
+    fetchMovies();
+  </script>
+</body>
+</html>
